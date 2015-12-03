@@ -1,8 +1,8 @@
 import qualified Data.Map as Map
 
 type Message            = Integer
-type Rebit              = Float
-type Prob               = Float
+type Rebit              = Double
+type Prob               = Double
 type PartialCalculation = (Map.Map Integer Prob, [Rebit])
 
 squareInnerProduct :: Rebit -> Rebit -> Prob
@@ -18,7 +18,7 @@ boundaryRebits m = [2 * pi * fromInteger k / fromInteger d | k <- [0..(d - 1)]]
 
 isBlack :: Message -> Rebit -> Integer -- 0 for no, 1 for yes
 isBlack m phi
-    | odd m     = 1 - (isBlack (m - 1) phi) -- antisymmetry of cirle n and n+1
+    | odd m     = 1 - (isBlack (m - 1) phi) -- antisymmetry of cirle n and n + 1
     | phi > pi  = 1 - (isBlack m (phi - pi)) -- antisymmetry of antipodal phi
     | odd k     = 0
     | otherwise = 1
