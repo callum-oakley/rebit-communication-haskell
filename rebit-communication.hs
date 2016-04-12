@@ -1,43 +1,51 @@
 import qualified Data.Map as Map
+import Data.Fixed (mod')
 
 type Message            = Integer
 type Rebit              = Double
 type Prob               = Double
-type PartialCalculation = (Map.Map Integer Prob, [Rebit])
+type PartialCalculation = Map.Map Integer Prob
 
 squareInnerProduct :: Rebit -> Rebit -> Prob
 squareInnerProduct phi psi = (cos ((phi - psi) / 2)) ^ 2
 
-divisions :: Message -> Integer -- now many slices to cut the mth cirle in to
-divisions m = 2 ^ (div m 2 + 1)
+divisions :: Message -> Integer -- now many slices to cut the nth cirle in to
+divisions n = 2 ^ (div n 2 + 1)
 
-boundaryRebits :: Message -> [Rebit]
-boundaryRebits m = [2 * pi * fromInteger k / fromInteger d | k <- [0..(d - 1)]]
-  where
-    d = divisions m
+edge :: Message -> Integer -> Rebit
+edge n k = 2 * pi * fromInteger k / fromInteger (divisions n)
 
-isBlack :: Message -> Rebit -> Integer -- 0 for no, 1 for yes
-isBlack m phi
-    | odd m     = 1 - (isBlack (m - 1) phi) -- antisymmetry of cirle n and n + 1
-    | phi > pi  = 1 - (isBlack m (phi - pi)) -- antisymmetry of antipodal phi
-    | odd k     = 0
-    | otherwise = 1
+middle :: Message -> Integer -> Rebit
+middle n k
+    | circle n x == 1 = x
+    | circle n y == 1= y
   where
+    x = mod' ((edge n k + edge n (k + 1)) / 2) (2*pi)
+    y = mod' ((edge n (k - 1) + edge n k) / 2) (2*pi)
+
+circle :: Message -> Rebit -> Integer
+circle m phi
+    | odd m      = 1 - (circle (m - 1) phi') -- antisymmetry of cirle n and n+1
+    | phi' >= pi = 1 - (circle m (phi' - pi)) -- antisymmetry of antipodal phi
+    | even k     = 1
+    | otherwise  = 0
+  where
+    phi' = mod' phi (2 * pi) -- normalise phi to the range [0, 2pi)
     k = floor ((fromInteger (divisions m) * phi) / (2 * pi))
 
-calculateProb :: Rebit -> Message -> PartialCalculation -> PartialCalculation
-calculateProb psi m (currentProbs, extremalRebits)
-    | isTriviallyZero = (Map.insert m 0 currentProbs, extremalRebits)
-    | otherwise       = (Map.insert m pMin currentProbs, phiMin:extremalRebits)
+calculateProb :: Rebit -> PartialCalculation -> Message -> PartialCalculation
+calculateProb psi currentProbs n
+    | circle n psi == 0 = Map.insert n 0 currentProbs -- Proposition 1
+    | otherwise         = Map.insert n pMin currentProbs
   where
-    hasOverlap = or [isBlack m phi == 1 | phi <- extremalRebits]
-    isTriviallyZero = isBlack m psi == 0 || hasOverlap
-    extractMin phi (pMin, phiMin)
-        | p < pMin = (p, phi)
-        | otherwise = (pMin, phiMin)
-      where
-        p = squareInnerProduct psi phi
-    (pMin, phiMin) = foldr extractMin (1, 0) (boundaryRebits m)
+    pMin = minimum . map bound $ ks -- Proposition 3
+    bound k = squareInnerProduct psi (edge n k) -
+        sum [(currentProbs Map.! m) * fromInteger (circle m $ middle n k) |
+        m <- [0..(n - 1)]]
+    ks  | elem n [0, 1] = [0, 1]
+        | otherwise =
+            [1..(div (divisions n) 2 - 1)] ++
+            [(div (divisions n) 2 + 1)..(divisions n - 1)] -- ignore vertical edges since they aren't boundaries after message 0 and 1
 
 calculateProbs :: Rebit -> Integer -> Map.Map Integer Prob -- up to message n
-calculateProbs phi n = fst . foldr (calculateProb phi) (Map.empty, []) $ [0..n]
+calculateProbs phi n = foldl (calculateProb phi) Map.empty $ [0..n]
